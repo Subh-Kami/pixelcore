@@ -67,7 +67,7 @@ class Monitor:
         self.regs = [[0.0] * prog.lanes for _ in range(NREG)]
         self.mem = [0.0] * kernel.SINK
         self.values, self.written, self._expect = {}, {}, []
-        self.last = f"loaded {len(prog.stages)} blocks, {len(prog.memory)} words"
+        self._exec(0, 0)  # the host's last token starts warp 0 at block 0; the model goes on
 
     def feed(self, t: int) -> None:
         """One chip token the model wrote (0 .. CHIP_VOCAB - 1)."""
@@ -82,18 +82,7 @@ class Monitor:
                 self.done, self.block, self.warp = True, None, None
                 self.last = "launch done"
                 return
-            self.block, self.warp = b, w
-            self.records += 1
-            self.warps[w] = self.blocks[b] = 1.0
-            for s in range(len(p.stages[b])):
-                if p.stages[b][s] != "nop":
-                    self.stages[s] = 1.0
-            self._expect = [("reg", rd, L, h) for _, rd in p.live[b]
-                            for L in range(p.lanes) for h in (0, 1)]
-            if p.writeback[b]:
-                self._expect += [(part, L) for L in range(p.lanes) for part in ("addr", "lo", "hi")]
-            ops = " ".join(o for o in p.stages[b] if o != "nop")
-            self.last = f"warp {w} runs block {b}: {ops}"
+            self._exec(b, w)
             return
         if not self._expect:
             return
@@ -117,6 +106,22 @@ class Monitor:
             self.written[self._addr] = self._lo | t << 16
             self.mem_writes += 1
             self.last = f"lane {item[1]} writes memory word {self._addr}"
+
+    def _exec(self, b: int, w: int) -> None:
+        """EXEC(b, w): warp w runs block b; its record's values follow."""
+        p = self.prog
+        self.block, self.warp = b, w
+        self.records += 1
+        self.warps[w] = self.blocks[b] = 1.0
+        for s in range(len(p.stages[b])):
+            if p.stages[b][s] != "nop":
+                self.stages[s] = 1.0
+        self._expect = [("reg", rd, L, h) for _, rd in p.live[b]
+                        for L in range(p.lanes) for h in (0, 1)]
+        if p.writeback[b]:
+            self._expect += [(part, L) for L in range(p.lanes) for part in ("addr", "lo", "hi")]
+        ops = " ".join(o for o in p.stages[b] if o != "nop")
+        self.last = f"warp {w} runs block {b}: {ops}"
 
     def tick(self) -> None:
         """One frame: every light fades."""

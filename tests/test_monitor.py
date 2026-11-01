@@ -22,11 +22,13 @@ def test_monitor_decodes_the_stream(name, data, n):
     tr = run_blocks(lw.blocks, lw.mem, lw.warps, lanes=4)
     mon = Monitor()
     mon.load(Program.of(lw, 4))
-    for t in tr.tokens[len(host_tokens(lw)) - 1:]:  # from the first EXEC, as the model writes
+    for t in tr.tokens[len(host_tokens(lw)):]:  # only what the model writes, as the app sees it
         mon.feed(t)
         mon.tick()
     assert mon.done
     assert mon.records == sum(EXEC0 <= t < LOAD0 for t in tr.tokens) - 1  # but the end token
+    # block 0 starts at the host's EXEC: its values are decoded too
+    assert all((0, rd, L) in mon.values for _, rd in Program.of(lw, 4).live[0] for L in range(4))
     for bid, size in p.outputs.values():
         for a in range(lw.buffers[bid], lw.buffers[bid] + size):
             if a in mon.written or tr.mem[a] != lw.mem.get(a, 0):
