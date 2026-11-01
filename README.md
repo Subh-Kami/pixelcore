@@ -114,12 +114,10 @@ git clone https://github.com/vixhal-baraiya/qwenGPU && cd qwenGPU
 uv sync
 uv run hf download Qwen/Qwen3.5-2B --local-dir models/Qwen3.5-2B
 uv run python -m qgpu.merge models/Qwen3.5-2B build/merged-2b
-uv run qgpu build/merged-2b --check
+uv run qgpu build/merged-2b
 ```
 
-The merge takes a few minutes and writes a 14 GB checkpoint. In the chat, type `/` for
-commands: `/mode normal|advanced`, `/verify on|off` (check every launch against the
-reference), `/think on|off`, `/new`, `/panel`, `/help`.
+In the chat, type `/` for commands.
 
 Other entry points:
 
