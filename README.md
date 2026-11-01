@@ -105,19 +105,20 @@ A launch takes tens to a few hundred generated tokens, about 10-15 tokens per se
 
 ## Quickstart
 
-Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), about 16 GB of free memory for
+Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/),
+[just](https://github.com/casey/just), about 16 GB of free memory for
 the 2B model (Apple silicon, an NVIDIA GPU or a CPU), and for advanced mode a clang with the
 NVPTX backend (`brew install llvm`, or set `CLANG` to its path).
 
 ```bash
 git clone https://github.com/vixhal-baraiya/qwenGPU && cd qwenGPU
-uv sync
-uv run hf download Qwen/Qwen3.5-2B --local-dir models/Qwen3.5-2B
-uv run python -m qgpu.merge models/Qwen3.5-2B build/merged-2b
-uv run qgpu build/merged-2b
+just setup
+just build
+just chat
 ```
 
-In the chat, type `/` for commands.
+`just build` downloads Qwen3.5-2B and compiles the GPU into it. In the chat, type `/` for
+commands. `just` lists every recipe, including `just check` and `just test`.
 
 Other entry points:
 
@@ -142,7 +143,7 @@ uv run python scripts/eval_chat.py build/merged-2b --samples 3
 | `docs/qgpu-cuda.md` | The CUDA reference for this GPU |
 | `tests/` | Circuit, driver, runtime, kernel and app tests |
 
-Run the tests with `uv run pytest`. The circuit tests evaluate the compiled weights exactly;
+Run the tests with `just test`. The circuit tests evaluate the compiled weights exactly;
 the slowest take a few minutes.
 
 ## Credits
