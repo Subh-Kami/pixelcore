@@ -109,9 +109,8 @@ Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), about 16 GB of fre
 the 2B model (Apple silicon, an NVIDIA GPU or a CPU), and for advanced mode a clang with the
 NVPTX backend (`brew install llvm`, or set `CLANG` to its path).
 
-In a clone of this repository:
-
 ```bash
+git clone https://github.com/vixhal-baraiya/qwenGPU && cd qwenGPU
 uv sync
 uv run hf download Qwen/Qwen3.5-2B --local-dir models/Qwen3.5-2B
 uv run python -m qgpu.merge models/Qwen3.5-2B build/merged-2b
