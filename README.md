@@ -6,14 +6,9 @@ front of Qwen's own 24, and none of their weights are learned: a compiler comput
 It runs real CUDA, compiled to NVIDIA PTX, and the model itself writes every step of each
 launch.
 
-```
-> What is the dot product of [1, 2, 3] and [4, 5, 6]?
+![qwenGPU running a dot product: the GPU's layers, registers and memory, token by token](docs/qgpu-demo.gif)
 
-● cuda(dot, a=[1, 2, 3], b=[4, 5, 6])
-  ⎿  ✓ dot  → [32, 0, 0]   47 tok · 4.0s · exact
-
-● The dot product of [1, 2, 3] and [4, 5, 6] is 32.
-```
+A real launch, token by token ([full-quality video](docs/qgpu-demo.mp4)).
 
 ## How it works
 
