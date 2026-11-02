@@ -1,166 +1,235 @@
-# qgpu: Qwen runs CUDA
+# PixelCore
 
-**qgpu is an experimental model: Qwen3.5-2B with a SIMT GPU compiled and inserted directly into
-its weights.** It is not a plugin, a tool or an emulator. The GPU is 45 transformer layers in
-front of Qwen's own 24, and none of their weights are learned: a compiler computes every one.
-It runs real CUDA, compiled to NVIDIA PTX, and the model itself writes every step of each
-launch.
+**A tiny game engine, compiled into Qwen3.5-2B. The model generates the state and every pixel.**
 
-![qwenGPU running a dot product: the GPU's layers, registers and memory, token by token](docs/qgpu-demo.gif)
+PixelCore adds eight fixed transformer layers in front of Qwen's 24 pretrained
+layers. They implement a complete 8×8 paddle game: ball motion, wall reflections,
+paddle collisions, scoring, win/loss, reset, and a pixel generator. None of the
+added weights are trained. The game is a circuit compiled into the model.
 
-A real launch, token by token ([full-quality video](docs/qgpu-demo.mp4)).
+One button goes in. **Eighteen generated tokens** come out: the next state, all
+64 pixels, and an end marker. The host decodes those pixels for display and runs
+an independent checker; it does not supply replacement game results.
 
-## How it works
+![PixelCore: a verified full-Qwen game, replayed at 4×](docs/media/pixelcore-demo.gif)
 
-**The GPU.** A 4-lane SIMT machine with 15 registers per lane, a 4-stage pipeline, a 32-block
-program ROM and 126 words of global memory, built from Qwen3.5's own layer types (Gated
-DeltaNet linear attention and SwiGLU MLPs). Registers and memory live in the layers'
-recurrent state; each record the model writes runs one machine block (up to 4 instructions)
-for one warp.
-It supports integer arithmetic, comparisons and predicates, divergent branches, loops, global
-and shared memory, `atomicAdd`, `__syncthreads()` and warp shuffles.
+**[Full-quality video](docs/media/pixelcore-demo.mp4)** ·
+[Design](docs/design.md) · [Research](docs/research.md) ·
+[Results and raw data](docs/results.md) ·
+[Standalone model download](https://github.com/Subh-Kami/pixelcore/releases/latest)
 
-**A launch.** The host does what NVRTC and the CUDA driver do on a real GPU. It compiles the
-CUDA source to PTX with clang, lowers the PTX to the GPU's machine blocks
-(`qgpu/lower.py`), and feeds the program image and the input arrays as tokens. From there the
-model writes the launch itself: each generated token is a record of which block a warp ran
-and the values it produced, until an end-of-launch token. The host then reads the result
-arrays from the model's recurrent state. It never computes anything itself.
+The clip is a **4× replay of an actual full-Qwen run on a 24 GB Apple Silicon
+Mac**. The original compute time stays visible. An external controller supplies
+paddle buttons; the model computes the game and its pixels.
 
-**The merge.** `qgpu.merge` compiles the circuit with [Qwenputer](https://github.com/divagr18/qwenputer)'s
-transformer compiler, widens Qwen's residual stream, puts the circuit layers in front of
-Qwen's and adds the GPU's tokens to the vocabulary. Circuit dimensions that do not matter on
-text share Qwen's dimensions (the overlay), and the circuit is muted on text tokens, so
-Qwen's text is unchanged: the merged model's next-token distribution stays within a KL of
-about 7e-4 of the original.
+## Why build this?
 
-**The chat.** `qgpu` is a terminal chat with the merged model. When a message asks for a
-calculation, Qwen computes it on the GPU in its weights, in one of two modes:
+Language models usually talk about games or call an external game engine.
+PixelCore explores a different boundary: make the engine itself a small,
+inspectable computation inside the model's forward passes.
 
-- **normal**: Qwen writes the arithmetic as an expression (`[1, 2, 3] @ [4, 5, 6]`), and each
-  operation runs as a ready-made CUDA kernel from `kernels/`.
-- **advanced**: Qwen writes the CUDA kernel itself, guided by the
-  [qgpu CUDA reference](docs/qgpu-cuda.md) in its system prompt.
+The project began with [qwenGPU](https://github.com/vixhal-baraiya/qwenGPU), a
+SIMT GPU compiled into Qwen. The first experiment was a persistent particle
+world and framebuffer running through CUDA kernels. It worked, but the visual
+loop was slow. That led to a narrower question: **what if the layers represented
+the game directly, instead of interpreting general GPU instructions?**
 
-A panel next to the chat shows the GPU live: the warp scheduler, program ROM, pipeline,
-register file and memory light up as the model's tokens drive them.
+PixelCore is the resulting game-specific core. It trades general program support
+for a compact state transition and a short pixel-output protocol. The earlier
+CUDA experiment remains in this repository for comparison and reproduction;
+its workload is different, so its timing is not used as a speedup benchmark.
 
-## Gated DeltaNet as GPU state
+## What runs inside the weights?
 
-Like [Qwenputer](https://github.com/divagr18/qwenputer), qgpu keeps its machine state in the
-recurrent state of Qwen3.5's Gated DeltaNet layers. In the circuit's heads the gate is held
-open and the write strength is 1, and every key is one-hot, so each update overwrites exactly
-one row of a head's state and a one-hot query reads it back: each row is a memory cell.
+```mermaid
+flowchart LR
+    A[Host button token] --> B[8 compiled game layers]
+    S[(14-bit recurrent game state)] <--> B
+    B --> Q[24 pretrained Qwen layers]
+    Q --> L[Model next-token logits]
+    L --> T[State + pixel packets + end]
+    T -->|generated tokens fed back| B
+    T --> D[Host decodes pixel colors]
+    T -.-> V[Independent reference checker]
+```
 
-- **Program ROM**: each machine block's instructions, one instruction per stage, in heads of
-  their own.
-- **Registers**: 16 per lane for each warp (one always reads zero), in rows chosen by warp and
-  register.
-- **Global memory**: the kernel's arrays, one 32-bit word per row. Inputs are written by the
-  host before the launch; results are written by the circuit during it.
+- **State:** ball x/y, horizontal and vertical directions, paddle position,
+  score, and game-over flag live in a Gated DeltaNet head's recurrent state.
+- **Rules:** Boolean and integer circuits implement motion, contact steering,
+  reflections, scoring, terminal-state freezing, and reset.
+- **Pixels:** sixteen generated packets each contain four two-bit pixels.
+  The model computes which pixels are walls, ball, paddle, or background.
+- **Verification:** every token and the recurrent state are checked. A mismatch
+  stops execution. There is no silent reference fallback in model mode.
 
-A launch is a stream of tokens. The host writes the setup records: `PROG` and `LIVE` records
-load the program, `MEM` records load the inputs, and an `EXEC` token starts warp 0 at block 0.
-Then the model writes the rest. Each `EXEC(b, w)` token runs block `b` for warp `w` in one
-forward pass, and the `VAL` tokens after it carry the block's results, two 16-bit tokens per
-lane for each register a later block reads. Memory writes come back as `MEM` records, and
-`EXEC(0, warps)` ends the launch. The token stream is the GPU's execution log, and every value
-in it is exact in bf16.
+The full checkpoint runs all 32 layers through stock Transformers inference.
+Qwen's pretrained layers are muted on game tokens using the upstream merge
+technique. Their normal-text behavior is checked separately.
 
-## What runs where
+![One regular game tick emits 18 tokens](docs/media/token-budget.png)
 
-Qwen asks for a calculation with a tool call, in the format Qwen3.5 was trained on. Unlike
-Qwenputer, the host does act on that call: it does what a real GPU's host side does.
-
-- **The host**: compiles the CUDA to PTX, lowers the PTX to machine blocks, writes the
-  program and the input arrays as tokens, and reads the result arrays from the model's state
-  when the launch ends. It decides nothing about the values and computes none of them.
-- **The weights**: every step of the launch. The model writes each `EXEC` and `VAL` token by
-  greedy decoding through its own layers: which block runs next, every register value, every
-  branch and every memory write.
-
-With `--check`, each launch is replayed on a reference interpreter of the circuit and the
-model's tokens must match it exactly.
+The first frame emits 17 tokens because its initial state is an input.
+Subsequent state words are generated by the model, not re-uploaded by the host.
+[The exact state layout and token format are documented here.](docs/design.md)
 
 ## Results
 
-On Qwen3.5-2B, on Apple silicon (MPS, bf16):
+| Check | Observed result |
+| --- | --- |
+| Compiled game layers | 8, added to Qwen3.5-2B's 24 |
+| Recurrent game state | 14 bits |
+| Regular tick | 18 generated tokens |
+| Reachable-state circuit check | 266 states, 1,064 action transitions matched |
+| Persistent circuit sequence | 100 ticks matched without host state re-upload |
+| Complete full-Qwen game | 29 ticks, three saves, **539/539 tokens matched** |
+| Additional manual-input run | Movement, pause, reset and loss; **323/323 tokens matched** |
+| Small text regression check | 40/40 top-token agreement; mean KL 5.49e-4 |
+| Local targeted tests | 73 passed |
 
-- Every launch in our runs was exact. With `--check`, each launch is compared token for token
-  with a reference interpreter of the circuit, and that interpreter matched a real NVIDIA
-  Tesla T4 on 49 of 49 test kernels.
-- Text: the merged model's next-token distribution is within a KL of about 7e-4 of the
-  original.
-- Normal mode answered 20 of 24 sampled chat questions with numbers computed on the GPU.
-- Advanced mode wrote a correct kernel for 4 of 5 vector and matrix questions on the first
-  try (dot product, matrix product, squared length, vector addition). A 2B model's CUDA is still
-  unreliable; use normal mode for answers you rely on.
+Two execution modes were measured on the **same game and button sequence**, in
+bf16 on MPS. These are single-run prototype measurements:
 
-A launch takes tens to a few hundred generated tokens, about 10-15 tokens per second on MPS.
+| Mode | Pretrained language backbone? | Mean / tick | Median / tick |
+| --- | --- | ---: | ---: |
+| Full Qwen3.5-2B + PixelCore | Yes | 1.862 s | 1.842 s |
+| Standalone compiled circuit | No | 0.165 s | 0.152 s |
+
+![Measured latency for the same game in two distinct execution modes](docs/media/latency.png)
+
+The standalone model is a separate, roughly 54 MiB transformer containing the
+game circuit and a zero helper layer. Its speed is **not** full-Qwen speed.
+The combined Qwen checkpoint contains 5.81 GB of tensor data.
+[Raw traces, logs, methodology and limitations](docs/results.md).
+
+![Frames decoded from actual full-Qwen output packets](docs/media/game-frames.png)
 
 ## Quickstart
 
-Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/),
-[just](https://github.com/casey/just), about 16 GB of free memory for
-the 2B model (Apple silicon, an NVIDIA GPU or a CPU), and for advanced mode a clang with the
-NVPTX backend (`brew install llvm`, or set `CLANG` to its path).
+Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), and the pinned
+project dependencies. Apple Silicon/MPS is the tested model-inference platform;
+CPU and CUDA selection are supported but not benchmarked here.
 
-```bash
-git clone https://github.com/vixhal-baraiya/qwenGPU && cd qwenGPU
-just setup
-just build
-just chat
+```sh
+git clone https://github.com/Subh-Kami/pixelcore.git
+cd pixelcore
+uv sync --locked
 ```
 
-`just build` downloads Qwen3.5-2B and compiles the GPU into it. In the chat, type `/` for
-commands. `just` lists every recipe, including `just check` and `just test`.
+### Fast standalone circuit
 
-Other entry points:
+This builds the emitted game weights locally without downloading Qwen:
 
-```bash
-uv run python -m qgpu.bridge build/merged-2b "What is the sum of 12, 7, 30 and 5?"
-uv run python scripts/merged_check.py models/Qwen3.5-2B build/merged-2b
-uv run python scripts/eval_chat.py build/merged-2b --samples 3
+```sh
+uv run python -m qgpu.pixelcore.merge build/pixelcore-tiny
+uv run pixelcore --checkpoint build/pixelcore-tiny --port 8767
 ```
 
-## Repository
+Open **http://127.0.0.1:8767**. This is actual transformer inference, but it does
+not contain the pretrained language backbone. A prebuilt compressed standalone
+checkpoint is also available in [Releases](https://github.com/Subh-Kami/pixelcore/releases/latest).
 
-| Path | What it is |
-|---|---|
-| `qgpu/circuit/` | The GPU as transformer layers: the kernel circuit and its parts |
-| `qgpu/ptx.py`, `qgpu/lower.py` | The PTX parser and the driver that lowers PTX to machine blocks |
-| `qgpu/sim.py`, `qgpu/driver.py` | A reference SIMT interpreter for the PTX subset |
-| `qgpu/merge.py`, `qgpu/overlay.py` | Building a merged Qwen3.5 checkpoint |
-| `qgpu/runtime.py` | Launching a kernel on the merged model and reading results back |
-| `qgpu/cuda.py`, `qgpu/calc.py` | Advanced mode (Qwen's CUDA) and normal mode (expressions) |
-| `qgpu/bridge.py`, `qgpu/tui.py`, `qgpu/monitor.py` | The chat session, the terminal app and the GPU panel |
-| `kernels/` | The CUDA kernel library and the PTX tests run against |
-| `docs/qgpu-cuda.md` | The CUDA reference for this GPU |
-| `tests/` | Circuit, driver, runtime, kernel and app tests |
+After downloading `PixelCore-standalone-model.zip` from the release:
 
-Run the tests with `just test`. The circuit tests evaluate the compiled weights exactly;
-the slowest take a few minutes.
-
-## Credits
-
-The transformer compiler is [Qwenputer](https://github.com/divagr18/qwenputer) (MIT), which
-compiles a RISC-V CPU into Qwen3.5-4B; qgpu uses it as a library and builds its own GPU,
-driver and token format on top. If you use this work, please cite Qwenputer:
-
-```bibtex
-@software{agrawal2026qwenputer,
-  author  = {Agrawal, Divyansh},
-  title   = {{Qwenputer}: a computer compiled into the weights of a pretrained language model},
-  year    = {2026},
-  version = {0.1.0},
-  url     = {https://github.com/divagr18/qwenputer},
-  license = {MIT}
-}
+```sh
+unzip PixelCore-standalone-model.zip -d build/
+uv run pixelcore --checkpoint build/PixelCore-standalone --port 8767
 ```
 
-## License
+### Full Qwen3.5-2B mode
 
-The code is MIT, see [LICENSE](LICENSE). A checkpoint built with `qgpu.merge` is a modified
-[Qwen3.5](https://huggingface.co/Qwen/Qwen3.5-2B) model (its config is widened and GPU layers
-are added; Qwen's own weights are unchanged), so its weights fall under Qwen's Apache-2.0
-license.
+```sh
+uv run hf download Qwen/Qwen3.5-2B \
+  --revision 15852e8c16360a2fea060d615a32b45270f8a8fc \
+  --local-dir models/Qwen3.5-2B
+uv run python -m qgpu.pixelcore.merge build/pixelcore-2b \
+  --base models/Qwen3.5-2B
+uv run pixelcore --checkpoint build/pixelcore-2b --port 8766
+```
+
+Open **http://127.0.0.1:8766**. Allow space for the 4.55 GB base download, the
+5.81 GB merged checkpoint, dependencies and build overhead. The recorded runs
+used a 24 GB Mac. Large checkpoints and caches are excluded from Git; the build
+is reproducible from the pinned base revision and compiler dependency.
+
+**Controls:** Play; hold left/right; Space pauses; three saves wins. New game
+executes the compiled reset action. Assist paddle is an explicitly labeled
+external button controller. Pausing finishes the tick already in progress.
+
+A reference-only preview is available with `uv run pixelcore --port 8768`.
+Its badge identifies it as a CPU interpreter, not model inference. The macOS
+launchers `./run-pixelcore.command model` and `./run-pixelcore.command core`
+are equivalent shortcuts.
+
+![Playable viewer with full-Qwen inference and token/state inspection](docs/media/interface.jpg)
+
+## Reproduce the checks and figures
+
+```sh
+# Model-free circuit and runtime checks; also run in CI:
+uv run pytest tests/test_pixelcore.py tests/test_world.py \
+  tests/test_monitor.py tests/test_bridge.py -q
+
+# Independently replay-check all published game traces:
+uv run python scripts/verify_pixelcore_trace.py docs/results/full-qwen.json \
+  docs/results/standalone.json docs/results/manual-input.json
+
+# Record another complete game through the actual merged model:
+uv run python scripts/validate_pixelcore.py build/pixelcore-2b --device mps \
+  --output recordings/my-qwen-game.json
+
+# Recreate the plots from the committed data:
+uv run --with matplotlib==3.11.2 python scripts/plot_pixelcore_results.py
+
+# Recreate the labeled video; requires ffmpeg:
+uv run --with pillow==13.0.0 python scripts/render_pixelcore_clip.py \
+  docs/results/full-qwen.json recordings/demo.mp4
+```
+
+The 73-test local suite additionally includes `tests/test_cuda.py`, which needs
+an LLVM clang with the NVPTX backend. The model-free CI suite does not download
+model weights or attempt GPU inference. See [results](docs/results.md) for the
+text check, recordings and exact environment.
+
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| [`qgpu/pixelcore/circuit.py`](qgpu/pixelcore/circuit.py) | Game rules, recurrent head, rasterizer and next-token circuit |
+| [`qgpu/pixelcore/spec.py`](qgpu/pixelcore/spec.py) | Independent game specification and token format |
+| [`qgpu/pixelcore/merge.py`](qgpu/pixelcore/merge.py) | Compile standalone or merged-Qwen checkpoints |
+| [`qgpu/pixelcore/runtime.py`](qgpu/pixelcore/runtime.py) | Actual model decoding and lock checking |
+| [`qgpu/pixelcore/server.py`](qgpu/pixelcore/server.py), [`ui/`](qgpu/pixelcore/ui/) | Local playable viewer |
+| [`tests/test_pixelcore.py`](tests/test_pixelcore.py) | Reachable-state coverage, persistent sequences and mismatch guards |
+| [`docs/results/`](docs/results/) | Recorded tokens, frames, measurements and logs |
+| [`docs/research.md`](docs/research.md) | Papers, related work and contribution boundaries |
+| [`WEIGHTWORLD.md`](WEIGHTWORLD.md) | Earlier resident-CUDA particle experiment |
+| [`UPSTREAM_README.md`](UPSTREAM_README.md) | Original qwenGPU documentation |
+
+## Related work and scope
+
+This work builds directly on [Qwenputer](https://github.com/divagr18/qwenputer)
+and [qwenGPU](https://github.com/vixhal-baraiya/qwenGPU). Compiled transformer
+programs also have a longer research history, including
+[Tracr](https://arxiv.org/html/2301.05062v5) and
+[Tracr-Injection](https://arxiv.org/html/2505.10719v2). Existing in-model game work
+includes the [Qwenputer Doom-floor-plan raycaster](https://github.com/mapestree/qwenputer-doom).
+
+PixelCore's contribution is its **game-specific circuit, recurrent-state layout,
+packed-pixel protocol and verified interactive implementation**. It is not a
+general CUDA GPU, learned physics, or a claim to the first game inside an LLM.
+The finite-state and numerical checks are not a formal proof of every possible
+hardware implementation. [Detailed research discussion](docs/research.md).
+
+## Credits and license
+
+By [Subhanshu Dwivedi](https://github.com/Subh-Kami).
+
+- **Qwenputer / Divyansh Agrawal:** compiler, exact transformer primitives and
+  Gated DeltaNet memory conventions.
+- **qwenGPU / Vixhal Baraiya:** original SIMT baseline and adapted merge/runtime
+  techniques. The original Git history is retained.
+- **Qwen team:** Qwen3.5-2B pretrained backbone.
+
+Code is MIT; existing copyright notices are retained. Modified Qwen checkpoints
+retain the base model's license. See [LICENSE](LICENSE),
+[third-party notices](THIRD_PARTY.md), and [CITATION.cff](CITATION.cff).

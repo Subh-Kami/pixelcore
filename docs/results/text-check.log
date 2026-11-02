@@ -1,0 +1,22 @@
+Checking base text distributions on CPU…
+W1102 23:54:36.638000 99844 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
+
+Loading weights:   0%|          | 0/617 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 617/617 [00:00<00:00, 7468.39it/s]
+[transformers] `causal_conv1d_fn` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] `chunk_gated_delta_rule` is falling back to its reference PyTorch implementation because `flash-linear-attention` is not installed. This is correct but much slower; install `flash-linear-attention` for the optimized kernel.
+Checking PixelCore merged text distributions on CPU…
+
+Loading weights:   0%|          | 0/729 [00:00<?, ?it/s]
+Loading weights:  81%|████████  | 588/729 [00:00<00:00, 5816.60it/s]
+Loading weights: 100%|██████████| 729/729 [00:00<00:00, 6371.65it/s]
+{
+  "prompts": 4,
+  "positions": 40,
+  "top_token_agrees": 40,
+  "mean_KL": 0.0005491508054547012,
+  "max_KL": 0.0023637753911316395,
+  "game_token_leakage": false,
+  "device": "cpu",
+  "dtype": "bfloat16"
+}

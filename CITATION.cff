@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use PixelCore, cite this repository and the Qwenputer/qwenGPU foundations."
+type: software
+title: "PixelCore: a game engine compiled into Qwen3.5-2B"
+authors:
+  - family-names: Dwivedi
+    given-names: Subhanshu
+version: 0.1.0
+date-released: 2026-11-03
+url: "https://github.com/Subh-Kami/pixelcore"
+repository-code: "https://github.com/Subh-Kami/pixelcore"
+license: MIT
+keywords:
+  - transformers
+  - compiled-models
+  - recurrent-state
+  - Qwen3.5
+  - game-engine

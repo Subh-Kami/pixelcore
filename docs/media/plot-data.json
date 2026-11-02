@@ -1,0 +1,20 @@
+{
+  "verified": true,
+  "ticks": 29,
+  "modes": [
+    {
+      "mode": "full-qwen",
+      "mean_seconds": 1.8624700933197063,
+      "median_seconds": 1.8418922920245677,
+      "min_seconds": 1.6428451251704246,
+      "max_seconds": 2.375727290986106
+    },
+    {
+      "mode": "standalone",
+      "mean_seconds": 0.16537557751871645,
+      "median_seconds": 0.1523380831349641,
+      "min_seconds": 0.12103583384305239,
+      "max_seconds": 0.5282442499883473
+    }
+  ]
+}

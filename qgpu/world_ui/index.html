@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WeightWorld — a resident world experiment</title>
+  <meta name="description" content="Inspect a persistent simulation and pixel framebuffer on qwenGPU. Explicit reference and model modes, execution traces, and replay.">
+  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="WeightWorld home"><span class="brandmark">W<span>↗</span></span>WEIGHTWORLD<span class="version">EXPERIMENT 001</span></a>
+    <div class="header-actions"><span id="top-source">CONNECTING</span><span class="header-credit">ON QWENGPU</span><button id="capture" class="text-button">Focus view ↗</button></div>
+  </header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow"><span class="dot"></span> RESIDENT COMPUTE / VISUAL LAB</p>
+        <h1>A tiny world.<br><span>One memory upload.</span></h1>
+        <p class="lede">Four particles. Three CUDA kernels. An 8×8 framebuffer.<br>Inspect what survives from one launch to the next.</p>
+      </div>
+      <div class="mode-card"><span class="label">EXECUTION SOURCE</span><strong id="backend">Connecting…</strong><p id="provenance">Reading the local runtime.</p><span id="connection" class="connection">LOCAL RUNTIME</span></div>
+    </section>
+    <section class="lab">
+      <div class="arena-panel panel">
+        <div class="panel-top"><span class="label">01 / FRAMEBUFFER</span><span id="frame-label">FRAME 000</span></div>
+        <div class="canvas-wrap"><canvas id="arena" width="640" height="640" aria-label="8 by 8 framebuffer; colored cells show the kernel’s particle pixels"></canvas><span class="canvas-corner top-left">0,0</span><span class="canvas-corner bottom-right">7,7</span></div>
+        <div class="arena-caption"><span><span class="dot"></span> <span id="arena-caption">Initialized · step to render</span></span><span>64 PIXELS · INTEGER COLOR IDs</span></div>
+        <div class="controls"><button id="step" class="primary">Step world <span>→</span></button><button id="run">Run 4 steps</button><button id="reset" class="icon-button" title="Reset world">↺ Reset</button></div>
+        <div class="secondary-controls"><label>SEED <input id="seed" type="number" min="0" max="1000000" value="7" aria-label="World seed"></label><button id="export" class="text-button">↓ Export trace</button><button id="replay" class="text-button">↑ Replay trace</button><input id="trace-file" type="file" accept=".json,application/json" hidden></div>
+      </div>
+      <aside class="inspector">
+        <div class="panel execution">
+          <div class="panel-top"><span class="label">02 / EXECUTION</span><span id="phase-state" class="muted">AWAITING STEP</span></div>
+          <div class="phase" data-phase="clear"><span class="phase-number">01</span><div><strong>Clear</strong><span>Reset the framebuffer</span></div><span class="phase-meta">64 threads</span></div>
+          <div class="phase" data-phase="advance"><span class="phase-number">02</span><div><strong>Advance</strong><span>Move + reflect at the walls</span></div><span class="phase-meta">8 threads</span></div>
+          <div class="phase" data-phase="draw"><span class="phase-number">03</span><div><strong>Draw</strong><span>Scatter particles into pixels</span></div><span class="phase-meta">4 threads</span></div>
+          <div class="execution-readout"><div><span class="label">WARP</span><strong id="warp">—</strong></div><div><span class="label">BLOCK</span><strong id="block">—</strong></div><div><span class="label">STEP TOKENS</span><strong id="tokens">0</strong></div></div>
+          <div class="event-line" id="event">No execution yet.</div>
+        </div>
+        <div class="panel memory-panel">
+          <div class="panel-top"><span class="label">03 / RESIDENT MEMORY</span><span>80 / 127 WORDS</span></div>
+          <div id="memory" class="memory-grid" aria-label="Resident memory map: 16 state words, then 64 framebuffer words"></div>
+          <div class="memory-legend"><span><i class="state-key"></i>16 state words</span><span><i class="pixel-key"></i>64 pixel words</span></div>
+          <div class="residency"><div><span class="label">HOST MEMORY UPLOAD / LAST STEP</span><strong><span id="uploads">—</span><small> words</small></strong></div><span id="resident-tag">WAITING</span></div>
+        </div>
+        <div id="verification" class="verification"><span class="check">○</span><div><strong>Ready for verification</strong><span>Every launch is checked against the reference.</span></div></div>
+      </aside>
+    </section>
+    <section class="details">
+      <div class="detail-block"><span class="label">WHAT IS NEW HERE?</span><h2>The world stays resident.</h2><p>The first launch uploads 80 words. Later launches upload programs and a start token, preserving world data across clear → advance → draw. The framebuffer is computed by the kernels.</p></div>
+      <div class="detail-block"><span class="label">WHAT DOES THIS VIEW SHOW?</span><h2>Execution, with provenance.</h2><p id="mode-explanation">Reference mode uses a CPU interpreter. Model mode uses a merged Qwen checkpoint. A reference recording is never labeled as a model run.</p></div>
+      <div class="detail-block"><span class="label">PARTICLE STATE / x,y / vx,vy</span><div id="particles" class="particle-list"></div><p class="tiny">Wall reflections only. Overlapping pixels keep the highest particle ID. Displayed frames are complete kernel outputs; there is no motion interpolation.</p></div>
+    </section>
+    <div id="notice" role="status" aria-live="polite"></div>
+  </main>
+  <footer><span>WeightWorld · an extension of <a href="https://github.com/vixhal-baraiya/qwenGPU" target="_blank" rel="noreferrer">qwenGPU by @TheVixhal</a> · compiler: <a href="https://github.com/divagr18/qwenputer" target="_blank" rel="noreferrer">Qwenputer</a></span><span>BUILD FIRST. VERIFY. THEN CLAIM.</span></footer>
+</body></html>

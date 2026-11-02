@@ -1,7 +1,7 @@
 [project]
 name = "qgpu"
 version = "0.1.0"
-description = "A SIMT GPU that runs real CUDA, compiled into the weights of a stock Qwen3.5 model"
+description = "PixelCore game-specific transformer engine with the qwenGPU SIMT baseline"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 qgpu = "qgpu.tui:main"
+pixelcore = "qgpu.pixelcore.server:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]

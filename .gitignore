@@ -5,3 +5,16 @@ __pycache__/
 models/
 build/
 vendor/
+.weightworld/
+recordings/
+
+# Local credentials, caches and generated distributions
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+.cache/
+.mplconfig/
+dist/

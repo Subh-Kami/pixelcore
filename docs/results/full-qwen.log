@@ -1,0 +1,41 @@
+Loading PixelCore weights…
+W1102 23:37:12.497000 98895 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
+
+Loading weights:   0%|          | 0/729 [00:00<?, ?it/s]
+Loading weights:  85%|████████▍ | 618/729 [00:00<00:00, 6178.15it/s]
+Loading weights: 100%|██████████| 729/729 [00:00<00:00, 6355.38it/s]
+Loaded merged on mps in 5.99s
+[transformers] `causal_conv1d_fn` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] `chunk_gated_delta_rule` is falling back to its reference PyTorch implementation because `flash-linear-attention` is not installed. This is correct but much slower; install `flash-linear-attention` for the optimized kernel.
+[transformers] `causal_conv1d_update` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] `fused_recurrent_gated_delta_rule` is falling back to its reference PyTorch implementation because `flash-linear-attention` is not installed. This is correct but much slower; install `flash-linear-attention` for the optimized kernel.
+tick 1: left, score=0, over=0, 2.376s, 18 exact tokens
+tick 2: stay, score=0, over=0, 2.041s, 18 exact tokens
+tick 3: right, score=0, over=0, 2.061s, 18 exact tokens
+tick 4: right, score=0, over=0, 1.930s, 18 exact tokens
+tick 5: left, score=0, over=0, 1.993s, 18 exact tokens
+tick 6: left, score=0, over=0, 1.912s, 18 exact tokens
+tick 7: left, score=0, over=0, 1.972s, 18 exact tokens
+tick 8: left, score=0, over=0, 1.986s, 18 exact tokens
+tick 9: left, score=1, over=0, 1.969s, 18 exact tokens
+tick 10: right, score=1, over=0, 1.859s, 18 exact tokens
+tick 11: right, score=1, over=0, 1.883s, 18 exact tokens
+tick 12: right, score=1, over=0, 1.876s, 18 exact tokens
+tick 13: right, score=1, over=0, 1.842s, 18 exact tokens
+tick 14: right, score=1, over=0, 1.835s, 18 exact tokens
+tick 15: left, score=1, over=0, 1.721s, 18 exact tokens
+tick 16: left, score=1, over=0, 1.855s, 18 exact tokens
+tick 17: left, score=1, over=0, 1.807s, 18 exact tokens
+tick 18: left, score=1, over=0, 1.858s, 18 exact tokens
+tick 19: left, score=2, over=0, 1.817s, 18 exact tokens
+tick 20: right, score=2, over=0, 1.783s, 18 exact tokens
+tick 21: right, score=2, over=0, 1.763s, 18 exact tokens
+tick 22: right, score=2, over=0, 1.717s, 18 exact tokens
+tick 23: right, score=2, over=0, 1.837s, 18 exact tokens
+tick 24: right, score=2, over=0, 1.694s, 18 exact tokens
+tick 25: left, score=2, over=0, 1.832s, 18 exact tokens
+tick 26: left, score=2, over=0, 1.643s, 18 exact tokens
+tick 27: left, score=2, over=0, 1.740s, 18 exact tokens
+tick 28: left, score=2, over=0, 1.659s, 18 exact tokens
+tick 29: left, score=3, over=0, 1.751s, 18 exact tokens
+{'frames': 30, 'ticks': 29, 'tokens': 539, 'consistent': True, 'won': True, 'backend_claim': 'merged'}
